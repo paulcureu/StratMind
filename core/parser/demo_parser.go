@@ -131,8 +131,11 @@ func TrackRounds(demoPath string, outputPath string) error {
 				Zone: GetZoneName(
 					float64(p.Position().X),
 					float64(p.Position().Y),
+					float64(p.Position().Z),
 					zones,
 				),
+				
+				
 				Action:        getPlayerAction(p),
 				WeaponHeld:    getWeaponName(p),
 				IsScoped:      p.IsScoped(),
@@ -353,6 +356,8 @@ type MapZone struct {
 	XMax  float64 `json:"x_max"`
 	YMin  float64 `json:"y_min"`
 	YMax  float64 `json:"y_max"`
+	ZMin  float64 `json:"z_min"`
+	ZMax  float64 `json:"z_max"`
 }
 
 // Încarcă zonele dintr-un fișier JSON
@@ -372,11 +377,15 @@ func LoadZones(path string) []MapZone {
 }
 
 // Determină numele zonei pe baza X, Y
-func GetZoneName(x, y float64, zones []MapZone) string {
-	for _, z := range zones {
-		if x >= z.XMin && x <= z.XMax && y >= z.YMin && y <= z.YMax {
-			return z.Name
+func GetZoneName(x, y, z float64, zones []MapZone) string {
+	for _, zone := range zones {
+		if x >= zone.XMin && x <= zone.XMax &&
+		   y >= zone.YMin && y <= zone.YMax &&
+		   z >= zone.ZMin && z <= zone.ZMax {
+			return zone.Name
 		}
 	}
 	return "Unknown"
 }
+
+
