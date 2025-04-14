@@ -2,11 +2,11 @@ package parser
 
 type PlayerTimeline struct {
 	RoundNumber int    `json:"round_number"`
-	MatchID     string `json:"match_id,omitempty"` // optional
+	MatchID     string `json:"match_id,omitempty"`
 	SteamID     string `json:"steam_id"`
 	Nickname    string `json:"nickname"`
 	Team        string `json:"team"`
-	Side        string `json:"side"` // "T" or "CT"
+	Side        string `json:"side"` // "T" sau "CT"
 
 	RoleInRound    string  `json:"role_in_round"`
 	RoleConfidence float64 `json:"role_confidence"`
@@ -24,11 +24,10 @@ type PlayerTimeline struct {
 	TradedTeammate   bool        `json:"traded_teammate"`
 	TradedByTeammate bool        `json:"traded_by_teammate"`
 
-	Survived  bool    `json:"survived"`
-	TimeAlive float64 `json:"time_alive"`
-
-	WasFirstContact bool `json:"was_first_contact"`
-	Clutched        bool `json:"clutched"`
+	Survived        bool    `json:"survived"`
+	TimeAlive       float64 `json:"time_alive"`
+	WasFirstContact bool    `json:"was_first_contact"`
+	Clutched        bool    `json:"clutched"`
 
 	ImpactRating float64 `json:"impact_rating"`
 	Notes        string  `json:"notes"`
@@ -44,6 +43,7 @@ type PositionTick struct {
 	Tick          int      `json:"tick"`
 	Time          float64  `json:"time"`
 	Position      Position `json:"position"`
+	Zone          string   `json:"zone"` // ← Zone-ul jucătorului
 	Action        string   `json:"action"`
 	WeaponHeld    string   `json:"weapon_held"`
 	IsScoped      bool     `json:"is_scoped"`
