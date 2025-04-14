@@ -3,6 +3,7 @@ package parser
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 
 	dem "github.com/markus-wa/demoinfocs-golang/v4/pkg/demoinfocs"
@@ -17,7 +18,14 @@ var currentRound = 0
 // vom ține un flag: freezeTimeOver = false până se termină freeze time
 var freezeTimeOver = false
 
+// Mapă pentru a preveni duplicarea la același tick (dacă primim multiple net messages):
+var lastTickSaved = make(map[string]int)
+
+// TrackRounds parsează DEM-ul și produce un JSON cu timeline-uri
 func TrackRounds(demoPath string, outputPath string) error {
+	// Încarcă zonele din fișierul JSON (modifică calea dacă fișierul tău e în altă parte)
+	zones := LoadZones("D:/VSCode/StratMind/zones/mirage_zones.json")
+
 	file, err := os.Open(demoPath)
 	if err != nil {
 		return fmt.Errorf("nu pot deschide fișierul DEM: %w", err)
@@ -97,19 +105,34 @@ func TrackRounds(demoPath string, outputPath string) error {
 			}
 
 			tick := gameState.IngameTick()
-			// colectăm la fiecare 10 tick-uri, ex.
-			if tick%10 != 0 {
+
+			// exemplu: colectăm la fiecare 10 tick-uri
+			if tick%5 != 0 {
 				continue
 			}
 
+			// Verificăm dacă am salvat deja pentru jucătorul ăsta la tick-ul curent
+			if lastTickSaved[steamID] == tick {
+				// deja salvat -> nu mai adăugăm iarăși
+				continue
+			}
+			// Marchează tick-ul ca salvat
+			lastTickSaved[steamID] = tick
+
+			// Construim intrarea pt path
 			pt := PositionTick{
-				Tick:     tick,
-				Time:     parser.CurrentTime().Seconds(),
+				Tick: tick,
+				Time: parser.CurrentTime().Seconds(),
 				Position: Position{
 					float64(p.Position().X),
 					float64(p.Position().Y),
 					float64(p.Position().Z),
 				},
+				Zone: GetZoneName(
+					float64(p.Position().X),
+					float64(p.Position().Y),
+					zones,
+				),
 				Action:        getPlayerAction(p),
 				WeaponHeld:    getWeaponName(p),
 				IsScoped:      p.IsScoped(),
@@ -117,7 +140,7 @@ func TrackRounds(demoPath string, outputPath string) error {
 				IsMoving:      (p.Velocity().X != 0 || p.Velocity().Y != 0),
 				IsAirborne:    p.IsAirborne(),
 				HP:            p.Health(),
-				ViewAngle:     float64(p.ViewDirectionX()), // p.ViewDirectionX e float32 -> convertim
+				ViewAngle:     float64(p.ViewDirectionX()),
 				InCombat:      false,
 				NearTeammates: countNearbyTeammates(p, gameState),
 			}
@@ -228,6 +251,8 @@ func TrackRounds(demoPath string, outputPath string) error {
 // ----------------------------------------------------------------------------------
 // Alte funcții helper
 // ----------------------------------------------------------------------------------
+
+// E.g. scrie fișierul JSON final
 func saveTimelinesJSON(timelines []PlayerTimeline, path string) error {
 	f, err := os.Create(path)
 	if err != nil {
@@ -243,6 +268,7 @@ func saveTimelinesJSON(timelines []PlayerTimeline, path string) error {
 	return nil
 }
 
+// Convertește Team la string
 func TeamToString(t common.Team) string {
 	switch t {
 	case common.TeamTerrorists:
@@ -254,6 +280,7 @@ func TeamToString(t common.Team) string {
 	}
 }
 
+// Convertește Team la "T"/"CT"
 func sideString(t common.Team) string {
 	switch t {
 	case common.TeamTerrorists:
@@ -265,6 +292,7 @@ func sideString(t common.Team) string {
 	}
 }
 
+// Returnează numele armei
 func getWeaponName(p *common.Player) string {
 	if p.ActiveWeapon() != nil {
 		return p.ActiveWeapon().Type.String()
@@ -272,7 +300,7 @@ func getWeaponName(p *common.Player) string {
 	return ""
 }
 
-// Înlocuim Unknown cu Idle
+// Determină starea jucătorului (Idle, Walk, Crouch etc.)
 func getPlayerAction(p *common.Player) string {
 	vx := p.Velocity().X
 	vy := p.Velocity().Y
@@ -292,11 +320,11 @@ func getPlayerAction(p *common.Player) string {
 	case moving:
 		return "Walk"
 	default:
-		// dacă nimic din cele de sus, e practic Idle
 		return "Idle"
 	}
 }
 
+// Numără coechipierii apropiați (sub 500 units)
 func countNearbyTeammates(player *common.Player, gs dem.GameState) int {
 	if player == nil {
 		return 0
@@ -308,11 +336,47 @@ func countNearbyTeammates(player *common.Player, gs dem.GameState) int {
 		}
 		if teammate.Team == player.Team && player.Team != common.TeamUnassigned {
 			dist := player.Position().Distance(teammate.Position())
-			// ex: contorizăm coechipierii la mai puțin de 500 unități
 			if dist < 500 {
 				count++
 			}
 		}
 	}
 	return count
+}
+
+// ------------------------
+// Zone logic
+// ------------------------
+type MapZone struct {
+	Name  string  `json:"name"`
+	XMin  float64 `json:"x_min"`
+	XMax  float64 `json:"x_max"`
+	YMin  float64 `json:"y_min"`
+	YMax  float64 `json:"y_max"`
+}
+
+// Încarcă zonele dintr-un fișier JSON
+func LoadZones(path string) []MapZone {
+	file, err := os.Open(path)
+	if err != nil {
+		log.Fatalf("nu pot deschide fișierul cu zone: %v", err)
+	}
+	defer file.Close()
+
+	var zones []MapZone
+	if err := json.NewDecoder(file).Decode(&zones); err != nil {
+		log.Fatalf("eroare decodare zone: %v", err)
+	}
+	log.Printf("Au fost încărcate %d zone din %s\n", len(zones), path)
+	return zones
+}
+
+// Determină numele zonei pe baza X, Y
+func GetZoneName(x, y float64, zones []MapZone) string {
+	for _, z := range zones {
+		if x >= z.XMin && x <= z.XMax && y >= z.YMin && y <= z.YMax {
+			return z.Name
+		}
+	}
+	return "Unknown"
 }

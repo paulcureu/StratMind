@@ -43,6 +43,7 @@ type PositionTick struct {
 	Tick          int      `json:"tick"`
 	Time          float64  `json:"time"`
 	Position      Position `json:"position"`
+	Zone          string   `json:"zone"` // ← Zone-ul jucătorului
 	Action        string   `json:"action"`
 	WeaponHeld    string   `json:"weapon_held"`
 	IsScoped      bool     `json:"is_scoped"`
